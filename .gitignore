@@ -1,0 +1,4 @@
+.env
+docs/docs_descsions.md
+.env.test
+.env.prod
