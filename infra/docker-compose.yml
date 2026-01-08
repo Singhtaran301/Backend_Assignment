@@ -3,21 +3,26 @@ version: '3.8'
 services:
   # 1. API Service
   api:
-    build: .
+    build:
+      context: ../            # <--- FIX: Go UP to Root to find requirements.txt & src
+      dockerfile: infra/Dockerfile  # <--- FIX: Tell Docker the file is inside 'infra/'
     container_name: amrutam_api
     restart: on-failure
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ../.env               # <--- FIX: Load secrets from the Root .env
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # [OPTIONAL] Syncs your code changes instantly without rebuilding
+    volumes:
+      - ../src:/app/src
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # 2. Local Database (Fallback/Dev)
+  # 2. Database (Postgres)
   db:
     image: postgres:15-alpine
     container_name: amrutam_db
@@ -36,7 +41,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # 3. Redis Cache
+  # 3. Redis
   redis:
     image: redis:7-alpine
     container_name: amrutam_redis
