@@ -1,0 +1,17 @@
+fastapi[all]
+uvicorn[standard]
+sqlalchemy
+asyncpg
+pydantic-settings
+alembic
+python-multipart
+# Security
+passlib[bcrypt]
+python-jose[cryptography]
+# Database & Redis
+redis
+# Http Tools (needed for tests later)
+httpx
+requests
+# Linter (optional but good)
+ruff
