@@ -1,31 +1,19 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from src.common.config import settings
+from src.modules.auth.router import router as auth_router
 
 app = FastAPI(
     title="Amrutam Telemedicine API",
-    version="1.0.0",
-    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    description="Production-grade Backend for Telemedicine",
+    version="1.0.0"
 )
 
-# CORS (Security Checklist Item)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Change this to frontend domain in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 1. Include the Auth Router
+app.include_router(auth_router)
 
 @app.get("/health")
 def health_check():
-    """AWS/Docker Healthcheck endpoint"""
-    return {
-        "status": "healthy",
-        "app_name": "Amrutam Backend",
-        "env": settings.ENVIRONMENT
-    }
-
+    return {"status": "active", "service": "Amrutam API"}
+  
 @app.get("/")
 def root():
-    return {"message": "Amrutam API is running"}
+    return {"message": "Welcome to Amrutam API. Go to /docs for Swagger UI"}
