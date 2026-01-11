@@ -1,27 +1,22 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
 
 class Settings(BaseSettings):
-    # App
+    # 1. Database
+    DATABASE_URL: str
+    
+    # 2. Environment (Dev/Prod) - THIS WAS MISSING
     ENVIRONMENT: str = "development"
-    SECRET_KEY: str = Field(..., description="JWT Secret Key is missing!")
+
+    # 3. Security
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
+    
+    # 4. Expiration Times
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    LOG_LEVEL: str = "INFO"
-
-    # Database
-    DATABASE_URL: str = Field(..., description="Database URL is missing!")
-
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     class Config:
         env_file = ".env"
-        case_sensitive = True
+        extra = "ignore" 
 
-# Initialize settings
-try:
-    settings = Settings()
-except Exception as e:
-    print("❌ CRITICAL: Missing Environment Variables")
-    raise e
+settings = Settings()
