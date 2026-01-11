@@ -17,7 +17,9 @@ from src.core.database import Base
 
 # 2. Import ONLY the models we have created so far
 from src.modules.auth.models import * 
-from src.modules.availability.models import AvailabilitySlot # 3. Initialize Config
+from src.modules.availability.models import AvailabilitySlot
+from src.modules.bookings.models import Booking,IdempotencyKey
+from src.modules.payment.models import Payment
 config = context.config
 
 if config.config_file_name is not None:

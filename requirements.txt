@@ -16,3 +16,4 @@ httpx
 requests
 # Linter (optional but good)
 ruff
+apscheduler==3.10.4
