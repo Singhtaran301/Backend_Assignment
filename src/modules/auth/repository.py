@@ -1,21 +1,43 @@
 from sqlalchemy.future import select
 from sqlalchemy import update
-from sqlalchemy.orm import selectinload  # <--- THIS WAS MISSING
+from sqlalchemy.orm import selectinload
 from src.modules.auth.models import User, RefreshToken, Profile, DoctorProfile, AuditLog
 
 class AuthRepository:
     def __init__(self, db):
         self.db = db
 
-    async def create_user(self, user_data: dict):
+    # --- FIXED METHOD: Accepts 3 arguments now ---
+    async def create_user(self, user_data: dict, profile_data: dict, role: str):
+        # 1. Create the User (Account)
         new_user = User(**user_data)
         self.db.add(new_user)
+        # Flush to generate the UUID
+        await self.db.flush() 
+
+        # 2. Create the Generic Profile (Name, Phone, etc.)
+        new_profile = Profile(user_id=new_user.id, **profile_data)
+        self.db.add(new_profile)
+
+        # 3. Create Doctor Profile (Empty shell if role is doctor)
+        if role == "doctor":
+            # We MUST provide a default specialization to avoid database errors
+            doctor_profile = DoctorProfile(
+                user_id=new_user.id,
+                specialization="General Physician",
+                experience_years=0,
+                consultation_fee=0.0
+            )
+            self.db.add(doctor_profile)
+
+        # 4. Commit everything
         await self.db.commit()
         await self.db.refresh(new_user)
-        return new_user
+        
+        # 5. Return user with loaded relationships
+        return await self.get_full_user_details(new_user.id)
 
     async def get_user_by_email(self, email: str):
-        # We use selectinload here too just in case, though usually not needed for login
         query = select(User).where(User.email == email)
         result = await self.db.execute(query)
         return result.scalars().first()

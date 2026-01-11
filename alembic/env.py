@@ -16,7 +16,8 @@ from src.common.config import settings
 from src.core.database import Base
 
 # 2. Import ONLY the models we have created so far
-from src.modules.auth.models import * # 3. Initialize Config
+from src.modules.auth.models import * 
+from src.modules.availability.models import AvailabilitySlot # 3. Initialize Config
 config = context.config
 
 if config.config_file_name is not None:
