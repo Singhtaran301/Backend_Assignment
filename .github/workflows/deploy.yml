@@ -1,0 +1,61 @@
+name: Deploy to AWS ECS
+
+on:  
+  
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Updated to v4 for latest security/features
+
+      # 1. Configure AWS Credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      # 2. Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      # 3. Set Dynamic Variables
+      # Use the short Git SHA as the unique image tag
+      - name: Set deployment variables
+        id: vars
+        run: |
+          echo "IMAGE_TAG=$(echo ${{ github.sha }} | cut -c 1-8)" >> $GITHUB_OUTPUT
+          echo "ECR_REPOSITORY=fraud-api" >> $GITHUB_OUTPUT
+          echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_OUTPUT
+      
+      # 4. Build, Tag, and Push Image
+      - name: Build, tag, and push Docker image
+        working-directory: ./fraud_detection/
+        run: |
+          FULL_IMAGE_URI="${{ steps.vars.outputs.ECR_REGISTRY }}/${{ steps.vars.outputs.ECR_REPOSITORY }}:${{ steps.vars.outputs.IMAGE_TAG }}"
+          docker build -t $FULL_IMAGE_URI .
+          docker push $FULL_IMAGE_URI
+
+      # 5. Render (Update) Task Definition with NEW Image Tag
+      - name: Render new image URI in Task Definition
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1 # Use V1 for 'render'
+        with:
+          task-definition: ./fraud_detection/task-definition.json # Your local file
+          container-name: fraud-api-container # Name of the container in the JSON file
+          image: ${{ steps.vars.outputs.ECR_REGISTRY }}/${{ steps.vars.outputs.ECR_REPOSITORY }}:${{ steps.vars.outputs.IMAGE_TAG }}
+          
+      # 6. Deploy to ECS
+      - name: Deploy to ECS Service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }} # Use the updated definition
+          service: fraud-service
+          cluster: fraud-cluster2 # NOTE: Use your cluster name fraud-cluster2
+          wait-for-service-stability: true
