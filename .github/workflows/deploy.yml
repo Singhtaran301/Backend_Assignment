@@ -110,10 +110,22 @@ jobs:
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
+          username: ubuntu          # <--- MUST BE 'ubuntu'
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # 1. First time setup: Clone if folder doesn't exist
+            if [ ! -d "Backend_Assignment" ]; then
+              git clone https://github.com/${{ github.repository }}.git Backend_Assignment
+            fi
+            
+            # 2. Update Code
             cd Backend_Assignment
+            git checkout main
             git pull origin main
-            docker-compose -f infra/docker-compose.yml up -d --build
-            docker image prune -f
+            
+            # 3. Build & Run
+            # This builds the containers ON the server (No ECR needed)
+            sudo docker-compose -f infra/docker-compose.yml up -d --build
+            
+            # 4. Cleanup
+            sudo docker image prune -f
