@@ -103,29 +103,44 @@ jobs:
     name: 🚀 Deploy to EC2
     needs: quality-check
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
 
     steps:
       - name: 🚚 SSH and Deploy
         uses: appleboy/ssh-action@master
+        # 1. Define the Environment Variables first
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ubuntu          # <--- MUST BE 'ubuntu'
+          username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          # 2. Tell the action to pass these specific variables to the server
+          envs: POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,SECRET_KEY,DATABASE_URL
+          # 3. The script MUST be indented inside 'with'
           script: |
-            # 1. First time setup: Clone if folder doesn't exist
+            # Clone if missing
             if [ ! -d "Backend_Assignment" ]; then
               git clone https://github.com/${{ github.repository }}.git Backend_Assignment
             fi
             
-            # 2. Update Code
             cd Backend_Assignment
             git checkout main
             git pull origin main
             
-            # 3. Build & Run
-            # This builds the containers ON the server (No ECR needed)
+            # Securely Create .env file using the passed variables
+            echo "DATABASE_URL=$DATABASE_URL" > .env
+            echo "SECRET_KEY=$SECRET_KEY" >> .env
+            echo "ALGORITHM=HS256" >> .env
+            echo "ACCESS_TOKEN_EXPIRE_MINUTES=30" >> .env
+            echo "REDIS_URL=redis://redis:6379" >> .env
+            
+            # Build & Run
             sudo docker-compose -f infra/docker-compose.yml up -d --build
             
-            # 4. Cleanup
+            # Cleanup
             sudo docker image prune -f
