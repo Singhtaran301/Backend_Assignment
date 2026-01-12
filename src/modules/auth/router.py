@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
+# --- NEW IMPORT ---
+from fastapi_limiter.depends import RateLimiter
+
 from src.core.database import get_db
-# --- FIXED IMPORTS BELOW ---
 from src.modules.auth.schemas import (
     UserCreate, 
     UserResponse, 
     UserLogin, 
     TokenResponse, 
-    ProfileUpdate,   # <--- Added
-    ProfileResponse  # <--- Added
+    ProfileUpdate, 
+    ProfileResponse
 )
 from src.modules.auth.service import AuthService
 from src.modules.auth.repository import AuthRepository
@@ -25,7 +27,11 @@ def get_service(db: AsyncSession = Depends(get_db)) -> AuthService:
 async def register(user_data: UserCreate, service: AuthService = Depends(get_service)):
     return await service.register_user(user_data)
 
-@router.post("/login", response_model=TokenResponse)
+# --- UPDATED: Added Rate Limit (5 attempts / 60 seconds) ---
+@router.post("/login", 
+    response_model=TokenResponse,
+    dependencies=[Depends(RateLimiter(times=5, seconds=60))] 
+)
 async def login(login_data: UserLogin, service: AuthService = Depends(get_service)):
     return await service.login_user(login_data)
 

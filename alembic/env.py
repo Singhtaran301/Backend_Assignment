@@ -20,6 +20,7 @@ from src.modules.auth.models import *
 from src.modules.availability.models import AvailabilitySlot
 from src.modules.bookings.models import Booking,IdempotencyKey
 from src.modules.payment.models import Payment
+from src.modules.consultations.models import Prescription
 config = context.config
 
 if config.config_file_name is not None:
