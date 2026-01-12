@@ -18,3 +18,8 @@ requests
 ruff
 apscheduler==3.10.4
 cryptography
+python-json-logger 
+prometheus-fastapi-instrumentator
+pytest 
+pytest-asyncio 
+httpx

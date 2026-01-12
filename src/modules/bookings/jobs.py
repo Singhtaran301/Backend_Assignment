@@ -1,14 +1,14 @@
-import logging
+from src.core.logger import setup_logger
 import asyncio
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.future import select
 from src.core.database import AsyncSessionLocal
 from src.modules.bookings.models import Booking, BookingStatus
 from src.modules.availability.models import AvailabilitySlot
-from src.modules.audit.models import AuditLog # Ensure correct import path
+from src.modules.auth.models import AuditLog # Ensure correct import path
 
 # Setup structured logging
-logger = logging.getLogger(__name__)
+logger = setup_logger("background_worker")
 
 async def cancel_stale_bookings(max_retries: int = 3):
     """

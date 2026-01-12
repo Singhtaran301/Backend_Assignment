@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware # <--- NEW IMPORT
+from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-# --- NEW IMPORTS FOR RATE LIMITING ---
 from fastapi_limiter import FastAPILimiter
 from src.common.cache import cache
+
+# --- NEW IMPORTS ---
+from prometheus_fastapi_instrumentator import Instrumentator
+from src.core.middleware import RequestIDMiddleware
+# -------------------
 
 from src.modules.auth.router import router as auth_router
 from src.modules.availability.router import router as availability_router
@@ -17,48 +20,45 @@ from src.modules.doctors.router import router as doctors_router
 from src.modules.admin.router import router as admin_router
 from src.common.idempotency import IdempotencyMiddleware
 
-# 2. Setup Scheduler
 scheduler = AsyncIOScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- STARTUP ---
-    print("🚀 LIFESPAN STARTING: Initializing Scheduler...")
-    
-    # 1. Initialize Rate Limiter (NEW)
-    print("🛡️ Initializing Rate Limiter...")
+    print("🚀 LIFESPAN STARTING...")
     await FastAPILimiter.init(cache.redis)
     
-    # 2. Run the janitor every 60 seconds
     scheduler.add_job(cancel_stale_bookings, 'interval', seconds=60)
     scheduler.start()
     
-    yield # The app runs here
+    yield
     
-    # --- SHUTDOWN ---
-    print("🛑 SHUTDOWN: Stopping Scheduler...")
+    print("🛑 SHUTDOWN...")
     scheduler.shutdown()
 
-# 3. Create App with Lifespan
 app = FastAPI(
     title="Amrutam Telemedicine API",
-    description="Production-grade Backend for Telemedicine",
-    version="1.0.0",
-    lifespan=lifespan 
+    lifespan=lifespan
 )
 
-# --- NEW: CORS MIDDLEWARE (Security Phase) ---
+# --- 1. ADD METRICS (Prometheus) ---
+# Exposes /metrics endpoint automatically
+Instrumentator().instrument(app).expose(app)
+
+# --- 2. ADD REQUEST ID MIDDLEWARE ---
+# Must be added BEFORE other middleware to catch everything
+app.add_middleware(RequestIDMiddleware)
+
+# --- 3. EXISTING MIDDLEWARE ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000"], # Frontend + Swagger
+    allow_origins=["http://localhost:3000", "http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.add_middleware(IdempotencyMiddleware)
 
-# Include Routers
+# Routers
 app.include_router(auth_router)
 app.include_router(availability_router)
 app.include_router(booking_router)
@@ -69,8 +69,4 @@ app.include_router(admin_router)
 
 @app.get("/health")
 def health_check():
-    return {"status": "active", "service": "Amrutam API"}
-  
-@app.get("/")
-def root():
-    return {"message": "Welcome to Amrutam API. Go to /docs for Swagger UI"}
+    return {"status": "active"}
