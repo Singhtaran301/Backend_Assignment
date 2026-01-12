@@ -38,7 +38,6 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Checks for requirements in src or root
           if [ -f "src/requirements.txt" ]; then pip install -r src/requirements.txt; else pip install -r requirements.txt; fi
           pip install flake8 bandit pytest httpx pytest-asyncio anyio asyncpg sqlalchemy alembic passlib bcrypt
 
@@ -50,20 +49,19 @@ jobs:
       - name: 🔒 Security Scan (Bandit)
         run: bandit -r src -ll -ii
 
-      # --- CRITICAL FIX: JUST-IN-TIME MIGRATION ---
+      # --- JUST-IN-TIME MIGRATION (Creates the DB Structure for Testing) ---
       - name: 🛠️ Setup Database (Auto-Generate & Seed)
         env:
           DATABASE_URL: postgresql+asyncpg://user:password@localhost:5432/telemedicine
           PYTHONPATH: .
         run: |
-          # 1. Ensure the versions directory exists (in case it was ignored)
+          # 1. Ensure version folder exists
           mkdir -p alembic/versions
-
-          # 2. Generate a migration based on your current models.py
-          # This forces the CI DB to match your code exactly.
+          
+          # 2. Generate schema from your models.py
           alembic revision --autogenerate -m "ci_init"
           
-          # 3. Apply the migration to create tables (Users, Doctors, etc.)
+          # 3. Apply schema to the empty CI database
           alembic upgrade head
           
           # 4. Seed the Patient User (Required for the login test)
@@ -79,10 +77,10 @@ jobs:
           async def seed():
               engine = create_async_engine('postgresql+asyncpg://user:password@localhost:5432/telemedicine')
               async with engine.begin() as conn:
-                  # Use raw SQL to insert the user safely
+                  # FIX: Changed 'patient' to 'PATIENT' (Uppercase) to match Enum
                   await conn.execute(text(\"\"\"
                       INSERT INTO users (id, email, password_hash, role, is_active, is_verified, created_at, updated_at)
-                      VALUES ('123e4567-e89b-12d3-a456-426614174000', 'patient@gmail.com', :pwd, 'patient', true, true, now(), now())
+                      VALUES ('123e4567-e89b-12d3-a456-426614174000', 'patient@gmail.com', :pwd, 'PATIENT', true, true, now(), now())
                       ON CONFLICT (email) DO NOTHING;
                   \"\"\"), {'pwd': hashed})
               await engine.dispose()
