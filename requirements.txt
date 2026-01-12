@@ -23,3 +23,4 @@ prometheus-fastapi-instrumentator
 pytest 
 pytest-asyncio 
 httpx
+fastapi_limiter
