@@ -103,7 +103,7 @@ jobs:
     name: 🚀 Deploy to EC2
     needs: quality-check
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
 
     steps:
       - name: 🚚 SSH and Deploy
