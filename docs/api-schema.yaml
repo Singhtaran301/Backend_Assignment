@@ -1,0 +1,254 @@
+openapi: 3.0.3
+info:
+  title: Amrutam Telemedicine API
+  description: |
+    Production-grade backend for Amrutam's telemedicine platform.
+    Features:
+    - High concurrency booking with Pessimistic Locking
+    - Idempotency for payments and bookings
+    - RBAC for Patients, Doctors, and Admins
+  version: 1.0.0
+  contact:
+    name: Backend Engineering Team
+    email: dev@amrutam.com
+
+servers:
+  - url: http://13.205.164.230:8000
+    description: Production Server (AWS EC2)
+  - url: http://localhost:8000
+    description: Local Development
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserRegister:
+      type: object
+      required: [email, password, first_name, last_name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          type: string
+          enum: [patient, doctor]
+          default: patient
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          example: bearer
+
+    DoctorProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        full_name:
+          type: string
+        specialization:
+          type: string
+        consultation_fee:
+          type: number
+        is_verified:
+          type: boolean
+
+    AvailabilitySlot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        doctor_id:
+          type: string
+          format: uuid
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        is_booked:
+          type: boolean
+
+    BookingRequest:
+      type: object
+      required: [slot_id, reason]
+      properties:
+        slot_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          example: "Severe migraine since yesterday"
+
+    BookingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+        doctor_name:
+          type: string
+        slot_time:
+          type: string
+          format: date-time
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: Unique key to prevent duplicate bookings on network retry.
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      security: [] # Public endpoint
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+      responses:
+        '201':
+          description: User created successfully
+        '400':
+          description: Email already exists
+
+  /auth/login:
+    post:
+      summary: Login and get JWT tokens
+      security: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+
+  /doctors:
+    get:
+      summary: Search doctors by specialization
+      parameters:
+        - name: specialization
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of doctors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DoctorProfile'
+
+  /doctors/{doctor_id}/slots:
+    get:
+      summary: Get available slots for a doctor
+      parameters:
+        - name: doctor_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          description: Filter by date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AvailabilitySlot'
+
+  /bookings:
+    post:
+      summary: Book a consultation
+      description: Uses Pessimistic Locking to prevent double-booking. Requires Idempotency Key.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+      responses:
+        '201':
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '409':
+          description: Conflict - Slot already booked (Race Condition Handled)
+        '422':
+          description: Validation Error or Missing Idempotency Key
+
+  /metrics:
+    get:
+      summary: Prometheus Metrics
+      security: []
+      description: Exposes Application metrics for scraping
+      responses:
+        '200':
+          description: Plain text metrics
+          content:
+            text/plain:
+              schema:
+                type: string
