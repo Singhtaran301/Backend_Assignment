@@ -1,107 +1,190 @@
 # Amrutam Telemedicine Backend
 
 ## Executive Summary
-This is the backend system for Amrutam's telemedicine platform, implementing a production-grade solution with a focus on **scalability, reliability, security**, and **observability**. The system is deployed on a single EC2 instance using Docker Compose with horizontal scalability in mind.
+This repository contains a production-grade backend implementation for Amrutam’s telemedicine platform.  
+The system is designed with **correctness under concurrency**, **security**, **idempotency**, and **auditability** as first-class concerns.
 
-## Features Implemented
+The application is currently deployed on a **single AWS EC2 instance using Docker Compose**.  
+While not a highly available deployment, the architecture is intentionally **stateless and horizontally scalable**, and production-grade cloud mappings are documented.
 
-- **User Lifecycle**: Registration, login, refresh, logout, profile creation/update.
-- **Role-Based Access Control (RBAC)**: Roles for patient, doctor, and admin, enforced via middleware.
-- **Doctor Availability**: Slot management, slot locking, overlap prevention, and release upon failure.
-- **Booking Flow**: Idempotent booking with ACID transaction guarantees.
-- **Payment Flow**: Using the Saga pattern for asynchronous payments and ensuring idempotency.
-- **Consultation Lifecycle**: One prescription per booking, encrypted medical data, access control.
-- **Search & Filtering**: Doctor search by name, specialization with pagination and caching.
-- **Audit Logging**: Complete compliance with immutable logs for all critical events.
-- **Admin Analytics**: Revenue, consultation count, doctor utilization metrics.
+---
 
-## Infrastructure
+## Core Features Implemented
 
-- **EC2 Instance** running Docker Compose with:
-  - API (FastAPI)
+### User Lifecycle & Security
+- User registration and login
+- JWT-based authentication (access + refresh tokens)
+- Refresh token rotation and logout revocation
+- Role-Based Access Control (patient / doctor / admin)
+- Admin bootstrap via internal script (not public API)
+- Inactive user blocking
+- Audit logging for role and lifecycle changes
+
+### Doctor Availability & Booking
+- Doctor-managed availability slots
+- Slot overlap prevention
+- Slot locking using pessimistic DB locking
+- Idempotent booking creation
+- ACID transaction guarantees
+- Guaranteed prevention of double booking under concurrency
+
+### Payments & Saga Pattern
+- Booking lifecycle with explicit states (PENDING, CONFIRMED, CANCELLED)
+- Asynchronous payment flow using webhook callbacks
+- Saga-style compensation:
+  - Payment failure → slot released
+  - Timeout → booking cancelled
+- Webhook idempotency and replay safety
+- Full audit trail for payment events
+
+### Consultations & Clinical Data
+- One prescription per booking
+- Medical data encrypted at rest (symmetric encryption)
+- Prescription immutability enforced at service layer
+- Access restricted to patient and assigned doctor
+- Prescription creation and access audited
+
+### Search, Filtering & Performance
+- Doctor search by name and specialization
+- Pagination enforced on all list endpoints
+- Read-heavy endpoints cached using Redis
+- TTL-based cache invalidation
+- SQL joins used to prevent N+1 query issues
+
+### Admin & Analytics
+- Admin-only analytics endpoints
+- Revenue summary
+- Consultation volume
+- Doctor utilization metrics
+- Aggregations executed at the database level
+- No PII exposed
+
+---
+
+## Infrastructure & Deployment
+
+### Current Deployment (Implemented)
+- Single AWS EC2 instance
+- Docker Compose services:
+  - FastAPI application
   - PostgreSQL
   - Redis
-- **Cloud-Ready Design**: Easily deployable to ECS/GKE, RDS, ElastiCache with no code changes.
+- Docker volumes for persistence
+
+This setup is sufficient to validate correctness, concurrency handling, and system behavior, but **does not claim high availability**.
+
+### Cloud Readiness (Documented)
+| Component | Current | Production Mapping |
+|--------|--------|-------------------|
+| API | EC2 + Docker | ECS / GKE |
+| Database | Local Postgres | RDS / CloudSQL |
+| Cache | Redis container | ElastiCache |
+| Secrets | `.env` | Secrets Manager |
+
+Migration requires infrastructure changes only; no application code changes.
+
+---
 
 ## Data Model
+Core tables:
+- users
+- profiles
+- doctors
+- availability_slots
+- bookings
+- payments
+- prescriptions
+- audit_logs
 
-Key tables:
-- `users`
-- `profiles`
-- `doctors`
-- `availability_slots`
-- `bookings`
-- `payments`
-- `prescriptions`
-- `audit_logs`
+Design principles:
+- UUID primary keys
+- UTC, timezone-aware timestamps
+- Foreign key constraints enforced
+- High-growth tables identified for partitioning (documented)
 
-## Authentication & Authorization
+---
 
-- **Passwords** hashed using bcrypt.
-- **JWT Tokens** with short-lived access and long-lived refresh tokens.
-- **RBAC**: Enforced for admin and doctor-only routes.
+## Idempotency (Critical)
+- Idempotency-Key required for all write operations
+- Redis-backed idempotency store
+- Duplicate requests return the original response
+- 24-hour expiration window
+- Applied to bookings, payments, and write-heavy endpoints
 
-## Key Features
+---
 
-### 1. **Doctor Availability System**
-- Doctors create availability slots.
-- Overlap prevention and immutable booked slots.
-- Slot release on booking/payment failure.
+## Audit Logging
+- Append-only audit log table
+- Logs written inside the same DB transaction as business actions
+- Covers bookings, payments, prescriptions, and automated timeouts
+- Admin-only visibility
+- Immutable via API
 
-### 2. **Booking Flow**
-- Idempotent booking creation with concurrency protection (`SELECT FOR UPDATE`).
-- Transaction safety and audit logging.
+---
 
-### 3. **Payment & Saga Pattern**
-- **Asynchronous Payment Handling** using webhooks for success/failure.
-- Payment success updates booking state, failure releases slots.
-- Webhook idempotency and full audit trail.
+## Background Jobs
+- Asynchronous cleanup worker
+- Cancels stale unpaid bookings
+- Releases locked availability slots
+- Retry-safe with exponential backoff
+- Failures logged for inspection
 
-### 4. **Consultation & Clinical Data**
-- Prescriptions encrypted with symmetric Fernet encryption.
-- Immutable prescriptions after creation.
-- Access restricted to patient and doctor only.
+---
 
-### 5. **Search & Filtering**
-- Doctor search by name and specialization.
-- Read-heavy endpoints cached using Redis.
-- Query performance optimized with pagination and indexing.
+## Security Hardening
+- Password hashing using bcrypt
+- JWT authentication
+- RBAC enforced at middleware
+- Rate limiting on login endpoints
+- CORS restrictions
+- Static security scanning (Bandit)
+- No secrets logged or committed
 
-### 6. **Admin Analytics**
-- Admin-only access to revenue, consultation counts, and doctor utilization stats.
-- Data aggregation directly via SQL for performance.
+**Note:** MFA, TLS termination, and managed secrets are documented but not implemented due to scope constraints.
 
-### 7. **Audit Logging**
-- Immutable, append-only logs for critical actions (bookings, payments, prescriptions).
-- Logged events include `PRESCRIPTION_VIEWED`, `PAYMENT_SUCCESS`, etc.
+---
 
-## Testing & CI/CD
+## Observability
+- Structured JSON logs
+- Request correlation via request IDs
+- Audit logs for sensitive actions
+- Load testing used to validate latency and stability
 
-- **Unit & Integration Tests** using `pytest`.
-- **Load Testing** with Locust (500 concurrent users).
-- **CI Pipeline** with linting, tests, and security scans.
-- **Metrics**: p95 latency for reads and writes, error rates, rate limiter behavior.
+**Metrics Export:** Not integrated with Prometheus; performance validated via load testing instead.
 
-## Security & Hardening
+---
 
-- **Rate Limiting** on login endpoints.
-- **CORS** restrictions for frontend APIs.
-- **OWASP Top 10** mitigations implemented.
-- **Secrets Management** using environment variables, no secrets in code.
+## Testing & Validation
+- Integration tests for authentication, booking, and idempotency
+- End-to-end flow validation
+- Concurrency safety tested
+- Load testing using Locust:
+  - Stress test: 500 concurrent users
+  - Stability test: 50 concurrent users
+
+Observed locally (Docker):
+- Median read latency: ~4ms
+- Median write latency: ~61ms
+- p95 read latency: <200ms
+- p95 write latency: <500ms
+- No 500-level errors observed
+
+> Local load tests validate trends, not production throughput.
+
+---
 
 ## Known Limitations
+- Single-node EC2 deployment
+- No managed database or HA setup
+- Metrics not scraped by Prometheus
+- MFA documented but not implemented
 
-- Single-node EC2 deployment.
-- No managed DB yet (PostgreSQL running on EC2).
-- Metrics not exported to Prometheus.
-- MFA is documented but not implemented.
+---
 
 ## Demo Instructions
-
-1. **Start the API** by running the Docker Compose setup on EC2.
-2. **Navigate to FastAPI Docs** at `/docs` on the deployed API.
-3. **Demonstrate the following:**
-   - Login
-   - Book a slot (with idempotency protection)
-   - Payment saga
-   - View audit logs
+- Access FastAPI documentation at `/docs`
+- Demonstrate:
+  - Login
+  - Booking with Idempotency-Key
+  - Payment saga (success/failure)
+  - Audit log verification
