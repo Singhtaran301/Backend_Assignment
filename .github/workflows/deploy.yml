@@ -3,6 +3,9 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'infra/**'
   workflow_dispatch:
 
 jobs:
