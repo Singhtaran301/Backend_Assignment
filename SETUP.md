@@ -84,6 +84,14 @@ If you're on Windows, use PowerShell or Command Prompt. On macOS/Linux, use Term
 
    The API will be available at `http://localhost:8000`.
 
+4. Run database migrations to set up the schema:
+
+   ```
+   docker exec -it amrutam_api alembic upgrade head
+   ```
+
+   This applies all pending migrations to the PostgreSQL database.
+
 ## Step 4: Verify the Setup
 
 1. Open a web browser and go to `http://localhost:8000/health`.
@@ -205,6 +213,7 @@ Use the Swagger UI at `http://localhost:8000/docs` to test endpoints. Here's a s
   ```
 - **Make Changes:** Edit code in `src/`, then restart containers.
 - **Run Tests:** `docker exec -it amrutam_api pytest`.
+- **Run Load Tests:** `docker exec -it amrutam_api locust -f locustfile.py --host=http://localhost:8000` (access Locust UI at http://localhost:8089 for load testing).
 - **Metrics:** Visit `http://localhost:8000/metrics`.
 
 ## Troubleshooting
