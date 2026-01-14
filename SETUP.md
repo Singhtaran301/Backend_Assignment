@@ -205,7 +205,7 @@ Use the Swagger UI at `http://localhost:8000/docs` to test endpoints. Here's a s
   ```
 - **Make Changes:** Edit code in `src/`, then restart containers.
 - **Run Tests:** `docker exec -it amrutam_api pytest`.
-- **Metrics:** Visit `http://localhost:8000/metrics` for Prometheus data.
+- **Metrics:** Visit `http://localhost:8000/metrics`.
 
 ## Troubleshooting
 
