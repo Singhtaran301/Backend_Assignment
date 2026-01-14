@@ -177,7 +177,7 @@ Observed locally (Docker):
 - Single-node EC2 deployment
 - No managed database or HA setup
 - Metrics not scraped by Prometheus
-- MFA documented but not implemented
+
 
 ---
 
