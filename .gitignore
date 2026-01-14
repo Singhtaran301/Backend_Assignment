@@ -1,5 +1,5 @@
 
 docs/docs_descsions.md
-.env
+/.env
 .env.test
 .env.prod
